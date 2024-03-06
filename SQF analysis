@@ -1,0 +1,1328 @@
+setwd("*")
+
+## packages
+
+```{r}
+
+
+library(tidyverse)
+library(janitor)
+library(lubridate)
+library(ggthemes)
+library(ggeasy)
+library(sjmisc)
+library(weights)
+library(scales)
+library(ggh4x)
+library(extrafont)
+library(tidytext)
+library(signs)
+library(tidymodels)
+library(ggchicklet)
+library(ggrepel)
+
+```
+
+
+```{r}
+
+library(showtext)
+font_add(family = "Impact", regular = "impact.ttf")
+font_add(family = "Knockout", regular = "C:/R Projects/Police Reform/Graphs/Knockout-32JuniorCruisewt.otf")
+showtext_auto()
+showtext_opts(dpi = 300)
+
+```
+## census data prep
+
+```{r}
+
+census_PD_projected <- read_csv("PD_census_with_projection.csv")
+
+```
+
+```{r}
+
+# excludes below 10
+
+PD_census_race <- census_PD_projected %>% 
+  filter(age_group > 2) %>% 
+  group_by(year, race) %>% 
+  summarise(total_pop = sum(value))
+
+```
+
+```{r}
+
+census_OCA_projected <- read_csv("OCA_census_with_projection.csv")
+
+```
+
+
+```{r}
+
+# excludes below 10
+
+OCA_census_race <- census_OCA_projected %>% 
+  filter(age_group > 2) %>% 
+  group_by(year, race) %>% 
+  summarise(total_pop = sum(value))
+
+```
+
+## SQF data prep
+
+```{r}
+
+sqf_2013 <- read_csv("C:/R Projects/Police Reform/SQF/sqf_2013.csv") 
+
+
+sqf_2013 <- sqf_2013 %>% 
+  mutate(hit = if_else(arstmade == "Y"| sumissue == "Y", "Y", "N")) %>% 
+  mutate(arrest_hit = if_else(arstmade == "Y", "Y","N")) %>% 
+  mutate(datestop = mdy(datestop)) %>% 
+  select(date = datestop, sex, age, race, boro = city, crimsusp, frisked, searched, hit, arrest_hit, pct) 
+
+sqf_2013 <- sqf_2013 %>% 
+  mutate(age = as.integer(age)) %>% 
+  mutate(date = as.Date(date)) %>% 
+  mutate(pct = as.integer(pct))
+
+
+```
+
+
+
+```{r}
+
+sqf_2014 <- read_csv("C:/R Projects/Police Reform/SQF/sqf_2014.csv") 
+
+sqf_2014 <- sqf_2014 %>% 
+  mutate(hit = if_else(arstmade == "Y"| sumissue == "Y", "Y", "N")) %>% 
+  mutate(arrest_hit = if_else(arstmade == "Y", "Y","N")) %>% 
+  mutate(datestop = mdy(datestop)) %>% 
+  select(date = datestop, sex, age, race, boro = city, crimsusp, frisked, searched, hit, arrest_hit, pct) 
+
+sqf_2014 <- sqf_2014 %>% 
+  mutate(age = as.integer(age)) %>% 
+  mutate(date = as.Date(date)) %>% 
+  mutate(pct = as.integer(pct))
+
+
+```
+
+
+```{r}
+
+sqf_2015 <- read_csv("C:/R Projects/Police Reform/SQF/sqf_2015.csv") 
+
+sqf_2015 <- sqf_2015 %>% 
+  mutate(hit = if_else(arstmade == "Y"| sumissue == "Y", "Y", "N")) %>% 
+  mutate(arrest_hit = if_else(arstmade == "Y", "Y","N")) %>% 
+  mutate(datestop = mdy(datestop)) %>% 
+  select(date = datestop, sex, age, race, boro = city, crimsusp, frisked, searched, hit, arrest_hit, pct)
+
+sqf_2015 <- sqf_2015 %>% 
+  mutate(date = as.Date(date)) %>% 
+  mutate(pct = as.integer(pct))
+
+
+```
+
+```{r}
+
+sqf_2016 <- read_csv("C:/R Projects/Police Reform/SQF/sqf_2016.csv") 
+
+sqf_2016 <- sqf_2016 %>% 
+  mutate(hit = if_else(arstmade == "Y"| sumissue == "Y", "Y", "N")) %>% 
+  mutate(arrest_hit = if_else(arstmade == "Y", "Y","N")) %>% 
+  mutate(datestop = mdy(datestop)) %>% 
+  select(date = datestop, sex, age, race, boro = city, crimsusp, frisked, searched, hit, arrest_hit, pct)
+
+sqf_2016 <- sqf_2016 %>% 
+  mutate(age = as.integer(age)) %>% 
+  mutate(date = as.Date(date)) %>% 
+  mutate(pct = as.integer(pct))
+
+```
+
+
+```{r}
+
+sqf_2017 <- read_csv("C:/R Projects/Police Reform/SQF/sqf_2017.csv") 
+
+
+sqf_2017 <- sqf_2017 %>% 
+  clean_names() %>% 
+  mutate(hit = if_else(suspect_arrested_flag == "Y"| summons_issued_flag == "Y", "Y", "N")) %>% 
+  mutate(arrest_hit = if_else(suspect_arrested_flag == "Y", "Y", "N")) %>% 
+  select(date = stop_frisk_date, sex = suspect_sex, age = suspect_reported_age, race = suspect_race_description, boro = stop_location_boro_name, crimsusp = suspected_crime_description, frisked = frisked_flag, searched = searched_flag, hit, arrest_hit, pct = stop_location_precinct) 
+
+sqf_2017 <- sqf_2017 %>% 
+  mutate(age = as.integer(age)) %>% 
+  mutate(pct = as.integer(pct))
+
+```
+
+
+```{r}
+
+sqf_2018 <- read_csv("C:/R Projects/Police Reform/SQF/sqf_2018.csv") 
+
+sqf_2018 <- sqf_2018 %>% 
+  clean_names() %>% 
+  mutate(hit = if_else(suspect_arrested_flag == "Y"| summons_issued_flag == "Y", "Y", "N")) %>%
+  mutate(arrest_hit = if_else(suspect_arrested_flag == "Y", "Y", "N")) %>% 
+  select(date = stop_frisk_date, sex = suspect_sex, age = suspect_reported_age, race = suspect_race_description, boro = stop_location_boro_name, crimsusp = suspected_crime_description, frisked = frisked_flag, searched = searched_flag, hit, arrest_hit, pct = stop_location_precinct)
+
+sqf_2018 <- sqf_2018 %>% 
+  mutate(age = as.integer(age)) %>% 
+  mutate(date = as.Date(date, format="%m/%d/%Y")) %>% 
+  mutate(date = as.Date(date, format = "%Y/%m/%d")) %>% 
+  mutate(pct = as.integer(pct))
+
+```
+
+
+```{r}
+
+sqf_2019 <- read_csv("C:/R Projects/Police Reform/SQF/sqf_2019.csv") 
+
+sqf_2019 <- sqf_2019 %>% 
+  clean_names() %>% 
+  mutate(hit = if_else(suspect_arrested_flag == "Y"| summons_issued_flag == "Y", "Y", "N")) %>% 
+  mutate(arrest_hit = if_else(suspect_arrested_flag == "Y", "Y", "N")) %>% 
+  select(date = stop_frisk_date, sex = suspect_sex, age = suspect_reported_age, race = suspect_race_description, boro = stop_location_boro_name, crimsusp = suspected_crime_description, frisked = frisked_flag, searched = searched_flag, hit, arrest_hit, pct = stop_location_precinct)
+
+sqf_2019 <- sqf_2019 %>% 
+  mutate(age = as.integer(age)) %>% 
+  mutate(date = as.Date(date, format="%m/%d/%Y")) %>% 
+  mutate(date = as.Date(date, format = "%Y/%m/%d")) %>% 
+  mutate(pct = as.integer(pct))
+
+```
+
+
+```{r}
+
+sqf_2020 <- read_csv("C:/R Projects/Police Reform/SQF/sqf_2020.csv") 
+
+sqf_2020 <- sqf_2020 %>% 
+  clean_names() %>% 
+  mutate(hit = if_else(suspect_arrested_flag == "Y"| summons_issued_flag == "Y", "Y", "N")) %>% 
+  mutate(arrest_hit = if_else(suspect_arrested_flag == "Y", "Y", "N")) %>% 
+  select(date = stop_frisk_date, sex = suspect_sex, age = suspect_reported_age, race = suspect_race_description, boro = stop_location_boro_name, crimsusp = suspected_crime_description, frisked = frisked_flag, searched = searched_flag, hit, arrest_hit, pct = stop_location_precinct)
+
+sqf_2020 <- sqf_2020 %>% 
+  mutate(date = as.Date(date, format="%m/%d/%Y")) %>% 
+  mutate(date = as.Date(date, format = "%Y/%m/%d")) %>% 
+  mutate(pct = as.integer(pct))
+
+
+```
+
+
+```{r}
+
+sqf_2021 <- read_csv("C:/R Projects/Police Reform/SQF/sqf_2021.csv") 
+
+sqf_2021 <- sqf_2021 %>% 
+  clean_names() %>% 
+  mutate(hit = if_else(suspect_arrested_flag == "Y"| summons_issued_flag == "Y", "Y", "N")) %>% 
+  mutate(arrest_hit = if_else(suspect_arrested_flag == "Y", "Y", "N")) %>% 
+  select(date = stop_frisk_date, sex = suspect_sex, age = suspect_reported_age, race = suspect_race_description, boro = stop_location_boro_name, crimsusp = suspected_crime_description, frisked = frisked_flag, searched = searched_flag, hit, arrest_hit, pct = stop_location_precinct)
+
+sqf_2021 <- sqf_2021 %>% 
+  mutate(age = as.integer(age)) %>% 
+  mutate(date = as.Date(date)) %>% 
+  mutate(pct = as.integer(pct))
+
+```
+
+
+```{r}
+
+sqf_2022 <- read_csv("C:/R Projects/Police Reform/SQF/sqf_2022.csv") 
+
+sqf_2022 <- sqf_2022 %>% 
+  clean_names() %>% 
+  mutate(hit = if_else(suspect_arrested_flag == "Y"| summons_issued_flag == "Y", "Y", "N")) %>% 
+  mutate(arrest_hit = if_else(suspect_arrested_flag == "Y", "Y", "N")) %>% 
+  select(date = stop_frisk_date, sex = suspect_sex, age = suspect_reported_age, race = suspect_race_description, boro = stop_location_boro_name, crimsusp = suspected_crime_description, frisked = frisked_flag, searched = searched_flag, hit, arrest_hit, pct = stop_location_precinct)
+
+sqf_2022 <- sqf_2022 %>% 
+  mutate(age = as.integer(age)) %>% 
+  mutate(date = as.Date(date, format="%m/%d/%Y")) %>% 
+  mutate(date = as.Date(date, format = "%Y/%m/%d")) %>% 
+  mutate(pct = as.integer(pct))
+
+```
+
+
+```{r}
+
+full_sqf <- bind_rows(sqf_2013, sqf_2014, sqf_2015, sqf_2016, sqf_2017, sqf_2018, sqf_2019, sqf_2020, sqf_2021, sqf_2022)
+
+rm(sqf_2013, sqf_2014, sqf_2015, sqf_2016, sqf_2017, sqf_2018, sqf_2019, sqf_2020, sqf_2021, sqf_2022)
+
+```
+
+
+```{r}
+
+full_sqf <- full_sqf %>% 
+  mutate(year = year(date)) %>% 
+  mutate(race = case_when(race %in% c("B", "BLACK") ~ "nhblack",
+                          race %in% c("P","Q", "WHITE HISPANIC", "BLACK HISPANIC") ~ "hispanic",
+                          race %in% c("W", "WHITE") ~ "nhwhite",
+                          TRUE ~ "Other")) %>% 
+  mutate(boro = case_when(boro == "BRONX" ~ "Bronx",
+                          boro == "BROOKLYN" ~ "Brooklyn",
+                          boro == "MANHATTAN" ~ "Manhattan",
+                          boro == "QUEENS" ~ "Queens",
+                          boro %in% c("STATEN IS", "STATEN ISLAND") ~ "Staten Island")) 
+
+```
+
+
+
+
+## SQF analyses
+
+```{r}
+
+## total stops citywide
+
+full_sqf %>%
+  group_by(year) %>%
+  summarise(n = n()) %>%
+  ggplot(aes(x= year, y = n, fill = year))+
+  geom_chicklet(stat = "identity", fill = "#3b4982") +
+  geom_text(aes(label = scales::comma(n)),
+            vjust = -.5, 
+            size = 3,
+            labels = comma,
+            family = "Knockout") +
+  theme_classic()+
+  theme(text = element_text(family = "Knockout"),
+    axis.text = element_text(size = 9),
+    axis.line.x = element_line(size = .05),
+        legend.background = element_rect(fill = "white"),
+        legend.position = "top",
+        plot.background = element_rect(fill = "white"),
+        panel.background = element_rect(fill = "white"),
+        plot.title = element_text(size = 12),
+        panel.grid.major = element_blank(),
+        legend.key=element_blank(),
+    axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.35, "cm"))+
+  scale_y_continuous(labels = comma)+
+  labs(y = '', x = '', color = '') +
+  scale_y_continuous(labels = NULL) +
+   scale_x_continuous(breaks = seq(2013,2022,1),
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22"))+
+  # scale_x_continuous(breaks = 2013: 2022) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  expand_limits(y = 210000)
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.1.tiff", width = 7, height = 2.5)
+
+
+```
+
+```{r}
+
+full_sqf %>%
+  filter(!is.na(boro)) %>%
+  group_by(year, boro) %>%
+  summarise(n = n()) %>%
+ ggplot(aes(x= year, y = n, fill = year))+
+  geom_bar(stat = "identity", fill = "#3b4982") +
+  theme_classic() +
+  theme(plot.background = element_rect(fill = "NA"),
+        panel.background = element_rect(fill = "white"),
+        plot.title = element_text(size = 12),
+        panel.grid.major = element_blank(),
+        axis.text = element_text(size = 7)) +
+  theme(text = element_text(family = "Knockout"),
+        plot.background = element_rect(fill = "NA"),
+        panel.background = element_rect(fill = "NA"),
+        plot.title = element_text(size = 15, face = "bold"),
+        legend.background  = element_rect(fill = "white", color = NA),
+        legend.position = "top",
+        panel.grid.major = element_blank(),
+    axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  scale_y_continuous(labels = comma) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+   scale_x_continuous(breaks = seq(2013,2022,1),
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22"))+
+  facet_wrap2(vars(boro), axes = "x") +
+    geom_text(data = . %>% filter(year %in% c(2013,2022)),
+                  aes(label = scales::comma(n)),
+             vjust = -.5,
+                  size = 2.8,
+            color = 'black',
+            family = "Knockout") +
+  expand_limits(y = 80000)
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.2.tiff", width = 7, height = 4)
+
+
+```
+
+
+
+```{r}
+
+full_sqf %>% 
+  filter(!is.na(boro)) %>% 
+  group_by(year, boro) %>% 
+  summarise(n = n()) %>% 
+  mutate(percent = n / sum(n) * 100) %>% 
+  mutate(percent = round(percent, 1)) %>% 
+  mutate(boro = fct_relevel(boro, "Staten Island", "Queens", "Manhattan", "Brooklyn", "Bronx")) %>% 
+  ggplot(aes(x = year, y = percent, fill = boro)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.85, key_glyph = draw_key_point) +
+  theme_classic() +
+   theme(text = element_text(family = "Knockout"),
+           axis.text = element_text(size = 9),
+         panel.grid.major = element_blank(), 
+        axis.text.y=element_blank(), 
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "none",
+        axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.35, "cm"),
+     axis.line.x = element_line(size = .05)) +
+  scale_fill_manual(values = c("#419D78","#abadb0","#f79548","#00aeff","#3b4982"), name = "", guide = guide_legend(reverse = TRUE)) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  scale_y_continuous(labels = percent_format()) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+  scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  geom_text(aes(label = sprintf("%.1f%%", percent)), 
+            position = position_fill(vjust = 0.5), 
+            size = 3.5, color = "white", 
+            fontface = "bold", 
+            family = "Knockout")
+
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.3.tiff", width = 7, height = 4)
+
+
+```
+
+
+```{r}
+
+# note that for this part of the analysis we exclude a small number of juveniles younger than 10 
+
+sqf_yearly_race <- full_sqf %>% 
+  filter(race != "Other",
+         age > 9) %>% 
+  count(year, race)
+
+```
+
+
+**Total pedestrian stops, %**
+
+```{r}
+
+
+full_sqf %>% 
+  mutate(race = case_when(race == "nhwhite" ~ "White",
+                          race == "nhblack" ~ "Black",
+                          race == "hispanic" ~ "Hispanic",
+                          TRUE ~ "Other")) %>% 
+  group_by(year, race) %>% 
+  summarise(n = n()) %>% 
+  mutate(percent = n / sum(n) * 100) %>% 
+  mutate(percent = round(percent, 1)) %>% 
+  mutate(race = fct_reorder(race, percent)) %>% 
+  ggplot(aes(year, percent, fill = race)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.85, key_glyph = draw_key_point) +
+  theme_classic() +
+   theme(text = element_text(family = "Knockout"),
+         panel.grid.major = element_blank(), 
+        axis.text.y=element_blank(), 
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "none",
+        axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.35, "cm"),
+     axis.line.x = element_line(size = .05)) +
+  scale_fill_manual(values = c("#abadb0","#f79548","#00aeff","#3b4982"), name = "", guide = guide_legend(reverse = TRUE)) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  scale_y_continuous(labels = percent_format()) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+  scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  geom_text(aes(label = sprintf("%.1f%%", percent)), 
+            position = position_fill(vjust = 0.5), 
+            size = 3.5, color = "white", 
+            fontface = "bold", 
+            family = "Knockout")
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.4.tiff", width = 7, height = 4)
+
+
+```
+
+
+**Pedestrian stop rate per 100,000 people**
+
+```{r}
+
+left_join(sqf_yearly_race, PD_census_race,  by = c("race" = "race", "year" = "year")) %>% 
+  mutate(rate = round((n/total_pop)*100000),1) %>% 
+  mutate(race = case_when(race == "nhblack" ~ "Black",
+                          race == "hispanic" ~ "Hispanic",
+                          race == "nhwhite" ~ "White")) %>% 
+  select(year, race, rate) %>%
+  ggplot(aes(year, rate)) +
+    geom_bar(stat = "identity", fill = "#3b4982") +
+  theme_classic() +
+ theme(plot.background = element_rect(fill = "NA"),
+        panel.background = element_rect(fill = "white"),
+        plot.title = element_text(size = 12),
+        panel.grid.major = element_blank(),
+        axis.text = element_text(size = 7)) +
+  theme(text = element_text(family = "Knockout"),
+        plot.background = element_rect(fill = "NA"),
+        panel.background = element_rect(fill = "NA"),
+        plot.title = element_text(size = 15, face = "bold"),
+        legend.background  = element_rect(fill = "white", color = NA),
+        legend.position = "top",
+        panel.grid.major = element_blank(),
+    axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  scale_y_continuous(labels = comma)+
+  xlab("") +
+  labs(y = '', x = '', color = '') +
+  scale_y_continuous(labels = NULL) +
+  scale_x_continuous(breaks = 2013:2022) +
+  scale_colour_manual(values = c("#233267", "#2CAAE2","#e3800e")) +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  guides(fill = guide_legend(override.aes = list(shape = 21, size = 5)))+
+  scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+   facet_wrap2(vars(race), axes = "x", nrow = 2)+ 
+   geom_text(aes(label = scales::comma(rate)),
+            vjust = -.5, 
+            size = 3, 
+            family = "Knockout") +
+  expand_limits(y = 6600)
+
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.5.tiff", width = 7, height = 4)
+
+
+```
+
+
+
+```{r}
+
+
+left_join(sqf_yearly_race, PD_census_race,  by = c("race" = "race", "year" = "year")) %>% 
+  mutate(rate = (n/total_pop)*100000) %>% 
+  select(year, race, rate) %>% 
+  pivot_wider(names_from = race, values_from = rate) %>% 
+  mutate(`Black/white` = round(nhblack/nhwhite,1),
+         `Hispanic/white` = round(hispanic/nhwhite,1)) %>% 
+  pivot_longer(cols = c(`Black/white`, `Hispanic/white`), names_to = "race") %>% 
+  ggplot(aes(year, value, color = race, label = sprintf("%.1f", value))) +
+  geom_line(size = 1.5, key_glyph = draw_key_point) +
+  geom_point(data = . %>% filter(year %in% c(2022)), size = 2) +
+  theme_classic() +
+  theme(legend.position = "null", 
+        plot.background = element_rect(fill = "white"), 
+        panel.background = element_rect(fill = "white"), 
+        plot.title = element_text(size = 12), 
+       panel.grid.major = element_blank(),
+        legend.key=element_blank(),
+        axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.35, "cm"),
+     axis.line.x = element_line(size = .05)) +
+  scale_y_continuous(labels = comma)+
+  xlab("") +
+  expand_limits(y = 0) +
+  labs(y = '', x = '', color = '') +
+  scale_y_continuous(labels = NULL) +
+  scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  scale_colour_manual(values = c("#3b4982", "#00aeff")) +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  guides(fill = guide_legend(override.aes = list(shape = 21, size = 5)))+
+  geom_text(aes(label = sprintf("%.1f", value), color = race),
+                  size = 3, 
+            color = 'black',
+            family = "Knockout",
+            vjust = -.8) +
+  expand_limits(y = 13)
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.6.tiff", width = 6.5, height = 4)
+
+```
+
+
+```{r}
+
+
+hit_overall <- full_sqf %>% 
+    mutate(hit_rate = case_when((arrest_hit == "Y") ~ "Arrest",
+                                (arrest_hit == "N" & hit == "Y") ~ "Summons only",
+                                (arrest_hit == "N" & hit == "N") ~ "No Arrest/Summons")) %>% 
+    mutate(race = case_when(race == "nhwhite" ~ "White",
+                          race == "nhblack" ~ "Black",
+                          race == "hispanic" ~ "Hispanic",
+                          TRUE ~ "Other")) %>% 
+  filter(race != "Other") %>% 
+  group_by(year, hit_rate) %>% 
+  summarise(n = n()) %>% 
+  mutate(percent = n / sum(n) * 100) %>% 
+  mutate(percent = round(percent)) %>% 
+  mutate(hit_rate = fct_reorder(hit_rate, percent)) %>% 
+  mutate(race = "Overall")
+
+full_sqf %>% 
+    mutate(hit_rate = case_when((arrest_hit == "Y") ~ "Arrest",
+                                (arrest_hit == "N" & hit == "Y") ~ "Summons only",
+                                (arrest_hit == "N" & hit == "N") ~ "No Arrest/Summons")) %>% 
+    mutate(race = case_when(race == "nhwhite" ~ "White",
+                          race == "nhblack" ~ "Black",
+                          race == "hispanic" ~ "Hispanic",
+                          TRUE ~ "Other")) %>% 
+  filter(race != "Other") %>% 
+  group_by(race, year, hit_rate) %>% 
+  summarise(n = n()) %>% 
+  mutate(percent = n / sum(n) * 100) %>% 
+  mutate(percent = round(percent)) %>% 
+  mutate(hit_rate = fct_reorder(hit_rate, percent))  %>% 
+  bind_rows(hit_overall) %>% 
+    mutate(race = as.factor(race),
+           race = fct_relevel(race, "Black", "Hispanic", "White","Overall")) %>% 
+  ggplot(aes(x = year, y = percent, fill = hit_rate)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.85, key_glyph = draw_key_point) +
+  theme_classic() +
+  theme(text = element_text(family = "Knockout"),
+        axis.text = element_text(size = 7),
+        panel.grid.major = element_blank(), 
+        axis.text.y=element_blank(), 
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "top",
+        axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  scale_fill_manual(values = c("#f79548","#00aeff","#3b4982"), name = "", guide = guide_legend(reverse = TRUE)) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  scale_y_continuous(labels = NULL) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+  scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  facet_wrap2(vars(race), axes = "x", nrow = 2) +
+   geom_text(aes(label = ifelse(percent > 4, sprintf("%d%%", percent), "")), size = 3, position = position_fill(vjust = 0.5), color = "white", fontface = "bold", family = "Knockout")
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.7.tiff", width = 7, height = 4)
+
+
+```
+
+**Total pedestrian stops, %**  
+*By borough*
+
+```{r}
+
+full_sqf %>% 
+  filter(!is.na(boro)) %>% 
+  mutate(race = case_when(race == "nhwhite" ~ "White",
+                          race == "nhblack" ~ "Black",
+                          race == "hispanic" ~ "Hispanic",
+                          TRUE ~ "Other")) %>% 
+  group_by(year, boro, race) %>% 
+  summarise(n = n()) %>% 
+  mutate(percent = n / sum(n) * 100) %>% 
+  mutate(percent = round(percent)) %>% 
+  mutate(race = fct_reorder(race, percent))  %>% 
+  ggplot(aes(x = year, y = percent, fill = race)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.85, key_glyph = draw_key_point) +
+  theme_classic() +
+  theme(axis.text = element_text(size = 7),
+        panel.grid.major = element_blank(), 
+        axis.text.y=element_blank(), 
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "top",
+        text = element_text(family = "Knockout"),
+                axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  scale_fill_manual(values = c("#abadb0","#f79548","#00aeff","#3b4982"), name = "", guide = guide_legend(reverse = TRUE)) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  scale_y_continuous(labels = NULL) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+  scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  facet_wrap2(vars(boro), axes = "x", nrow = 3) +
+  geom_text(aes(label = ifelse(race %in% c("Black", "Hispanic"), sprintf("%d%%", percent), "")), size = 3, position = position_fill(vjust = 0.5), color = "white", fontface = "bold", family = "Knockout")
+
+
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.8.tiff", width = 7, height = 5)
+
+```
+
+
+
+```{r}
+
+PD_census_boro_race <- census_PD_projected %>% 
+  filter(age_group > 2) %>% 
+  mutate(boro = case_when(borough == "bronx" ~ "Bronx",
+                          borough == "kings" ~ "Brooklyn",
+                          borough == "manhattan" ~ "Manhattan",
+                          borough == "queens" ~ "Queens",
+                          borough == "si" ~ "Staten Island")) %>% 
+  group_by(year, boro, race) %>% 
+  summarise(total_pop = sum(value))
+
+```
+
+
+```{r}
+
+sqf_yearly_boro_race <- full_sqf %>% 
+  filter(race != "Other",
+         !is.na(boro),
+         age > 9) %>% 
+  count(year, boro, race)
+
+```
+
+
+```{r}
+
+sqf_boro <- left_join(sqf_yearly_boro_race, PD_census_boro_race,  by = c("year" = "year", "boro" = "boro", "race" = "race")) %>% 
+  mutate(rate = round((n/total_pop)*100000),1) %>% 
+  select(year, boro, race, rate)  %>%  
+  pivot_wider(names_from = race, values_from = rate) %>% 
+  mutate(`Black/white` = round(nhblack/nhwhite,1),
+         `Hispanic/white` = round(hispanic/nhwhite,1)) %>% 
+  pivot_longer(cols = c(`Black/white`, `Hispanic/white`), names_to = "race") %>% 
+  select(year, boro, race, value) %>%
+  mutate(nudge_y = ifelse(race == "Black/white", 2.5, -2.5)) 
+
+  ggplot(data = sqf_boro,
+         aes(year, value, color = race, label = value)) +
+  geom_line(key_glyph = draw_key_point, size = 1) +
+  geom_point(data = . %>% filter(year %in% c(2022)), size = 1.5) +
+  theme_classic() +
+  theme(axis.text = element_text(size = 7),
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "white"), 
+        plot.title = element_text(size = 12), 
+        panel.grid.major = element_blank()) +
+  theme(plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        plot.title = element_text(size = 15, face = "bold"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "none", 
+        panel.grid.major.y = element_line(linetype = "solid", size = .5),
+        text = element_text(family = "Knockout"),
+                axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  scale_y_continuous(labels = comma) +
+  xlab("") +
+  expand_limits(y = 0) +
+  labs(y = '', x = '', color = '') +
+  scale_y_continuous(labels = comma) +
+  scale_colour_manual(values = c("#3b4982", "#00aeff")) +
+  guides(fill = guide_legend(override.aes = list(shape = 21, size = 5))) +
+  facet_wrap2(vars(boro), axes = "x") +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+   scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  geom_text(data = . %>% filter(year %in% c(2013, 2022)),
+                  aes(label = sprintf("%.1f", value)),
+                  size = 2.5, 
+             position = position_nudge(y = sqf_boro$nudge_y),
+            color = 'black',
+            check_overlap = TRUE,
+            family = "Knockout") +
+  expand_limits(y = 30)
+
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.9.tiff", width = 7, height = 3.25)
+
+
+```
+
+
+
+```{r}
+
+full_sqf %>% 
+  mutate(sex_cat = case_when(sex == "FEMALE" ~ "Women",
+                          sex == "F" ~ "Women",
+                          sex == "MALE" ~ "Men",
+                          sex == "M" ~ "Men",
+                          TRUE ~ "Other")) %>% 
+  filter(sex_cat != "Other") %>% 
+  mutate(sex_cat = fct_relevel(sex_cat, "Women", "Men")) %>% 
+  group_by(year, sex_cat) %>% 
+  summarise(n = n()) %>% 
+  mutate(percent = n / sum(n) * 100) %>% 
+  mutate(percent = round(percent, 1)) %>% 
+  ggplot(aes(x = year, y = percent, fill = sex_cat)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.85, key_glyph = draw_key_point) +
+  theme_classic() +
+   theme(text = element_text(family = "Knockout"),
+         panel.grid.major = element_blank(), 
+        axis.text.y=element_blank(), 
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "none",
+        axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.35, "cm"),
+     axis.line.x = element_line(size = .05)) +
+  scale_fill_manual(values = c("#00aeff", "#3b4982"), name = "", guide = guide_legend(reverse = TRUE)) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  scale_y_continuous(labels = percent_format()) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+  scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  geom_text(aes(label = sprintf("%.1f%%", percent)), position = position_fill(vjust = 0.5), size = 3.5, color = "white", fontface = "bold", family = "Knockout")
+
+  
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.10.tiff", width = 7, height = 4)
+  
+
+```
+
+
+**Total stops, %**
+*by sex*
+
+```{r}
+
+full_sqf %>%
+  mutate(race = case_when(race == "nhwhite" ~ "White",
+                          race == "nhblack" ~ "Black",
+                          race == "hispanic" ~ "Hispanic",
+                          TRUE ~ "Other")) %>% 
+  mutate(sex_cat = case_when(sex == "FEMALE" ~ "Women",
+                          sex == "F" ~ "Women",
+                          sex == "MALE" ~ "Men",
+                          sex == "M" ~ "Men",
+                          TRUE ~ "Other")) %>% 
+  filter(sex_cat != "Other") %>% 
+  mutate(sex_cat = fct_relevel(sex_cat, "Men", "Women")) %>% 
+  group_by(year, sex_cat, race) %>%
+  summarise(n = n()) %>% 
+  mutate(percent = n / sum(n) * 100) %>% 
+  mutate(percent = round(percent)) %>% 
+  mutate(race = fct_reorder(race, percent)) %>% 
+  ggplot(aes(x = year, y = percent, fill = race)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.85, key_glyph = draw_key_point) +
+  theme_classic() +
+ theme(axis.text = element_text(size = 7),
+        panel.grid.major = element_blank(), 
+        axis.text.y=element_blank(), 
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "none",
+        text = element_text(family = "Knockout"),
+                axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  scale_fill_manual(values = c("#abadb0","#f79548","#00aeff","#3b4982"), name = "", guide = guide_legend(reverse = TRUE)) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  scale_y_continuous(labels = NULL) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+  scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  facet_wrap2(vars(sex_cat), axes = "x") +
+   geom_text(aes(label = ifelse(race %in% c("Black", "Hispanic", "White"), sprintf("%d%%", percent), "")), size = 3, position = position_fill(vjust = 0.5), color = "white", fontface = "bold", family = "Knockout")
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.11.tiff", width = 7, height = 3.5)
+
+```
+
+
+
+
+```{r}
+
+PD_census_sex_race <- census_PD_projected %>% 
+  filter(age_group > 2) %>% 
+  group_by(year, sex, race) %>% 
+  summarise(total_pop = sum(value))
+
+
+```
+
+
+```{r}
+
+sqf_yearly_sex_race <- full_sqf %>% 
+  mutate(sex = case_when(sex == "FEMALE" ~ "female",
+                          sex == "F" ~ "female",
+                          sex == "MALE" ~ "male",
+                          sex == "M" ~ "male",
+                          TRUE ~ "Other")) %>% 
+  filter(race != "Other",
+         sex != "Other",
+         age > 9) %>% 
+  count(year, sex, race)
+
+```
+
+
+
+```{r}
+
+sqf_sex <- left_join(sqf_yearly_sex_race, PD_census_sex_race,  by = c("year" = "year", "sex" = "sex", "race" = "race")) %>% 
+        mutate(sex = case_when(sex == "female" ~ "Women",
+                         sex == "male" ~ "Men"))  %>% 
+  mutate(rate = round((n/total_pop)*100000),1) %>% 
+  select(year, sex, race, rate)  %>%  
+  pivot_wider(names_from = race, values_from = rate) %>% 
+  mutate(`Black/white` = round(nhblack/nhwhite,1),
+         `Hispanic/white` = round(hispanic/nhwhite,1)) %>% 
+  pivot_longer(cols = c(`Black/white`, `Hispanic/white`), names_to = "race") %>% 
+  select(year, sex, race, value) %>%
+  mutate(nudge_y = ifelse(race == "Black/white", .5, -.5)) 
+
+  ggplot(data = sqf_sex,
+         aes(year, value, color = race, label = value)) +
+  geom_line(key_glyph = draw_key_point, size = 1) +
+  geom_point(data = . %>% filter(year %in% c(2022))) +
+  theme_classic() +
+  theme(axis.text = element_text(size = 7),
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "white"), 
+        axis.ticks.x = element_blank(), 
+        plot.title = element_text(size = 12), 
+        panel.grid.major = element_blank()) +
+ theme(plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        plot.title = element_text(size = 15, face = "bold"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "none", 
+        panel.grid.major.y = element_line(linetype = "solid", size = .5),
+        text = element_text(family = "Knockout"),
+                axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  scale_y_continuous(labels = comma) +
+  xlab("") +
+  expand_limits(y = 0) +
+  labs(y = '', x = '', color = '') +
+  scale_y_continuous(labels = comma) +
+  scale_colour_manual(values = c("#3b4982", "#00aeff")) +
+  guides(fill = guide_legend(override.aes = list(shape = 21, size = 5))) +
+  facet_wrap2(vars(sex), axes = "x") +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+   scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  geom_text(data = . %>% filter(year %in% c(2013, 2022)),
+                  aes(label = sprintf("%.1f", value)),
+                  size = 2.5, 
+             position = position_nudge(y = sqf_sex$nudge_y),
+            color = 'black',
+            check_overlap = TRUE,
+            family = "Knockout") +
+    expand_limits(y = 15)
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.12.tiff", width = 7, height = 4)
+
+```
+
+
+```{r}
+
+PD_census_age_race <- census_PD_projected %>% 
+  filter(age_group > 2) %>% 
+  mutate(age_cat = case_when(age_group >= 3 & age_group <= 5 ~ "<25",
+                             age_group >= 6 & age_group <= 9 ~ "25-44",
+                             age_group >= 10 ~ "45+")) %>% 
+  group_by(year, age_cat, race) %>% 
+  summarise(total_pop = sum(value))
+
+```
+
+
+```{r}
+
+sqf_yearly_age_race <- full_sqf %>% 
+  mutate(age_cat = case_when(age >=10 & age <= 24 ~ "<25",
+                             age >=25 & age <= 44 ~ "25-44",
+                             age >=45 & age <= 98 ~ "45+")) %>% 
+  filter(race != "Other",
+         !is.na(age_cat)) %>% 
+  count(year, age_cat, race)
+
+
+```
+
+
+
+
+```{r}
+
+full_sqf %>% 
+  mutate(age_cat = case_when(age >=10 & age <= 24 ~ "<25",
+                             age >=25 & age <= 44 ~ "25-44",
+                             age >=45 & age <= 98 ~ "45+")) %>% 
+  filter(!is.na(age_cat)) %>% 
+  mutate(age_cat = fct_relevel(age_cat, "45+", "25-44","<25")) %>% 
+  group_by(year, age_cat) %>% 
+  summarise(n = n()) %>% 
+  mutate(percent = n / sum(n) * 100) %>% 
+  mutate(percent = round(percent, 1)) %>% 
+  ggplot(aes(x = year, y = percent, fill = age_cat)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.85, key_glyph = draw_key_point) +
+  theme_classic() +
+ theme(axis.text = element_text(size = 9),
+        panel.grid.major = element_blank(), 
+        axis.text.y=element_blank(), 
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "none",
+        text = element_text(family = "Knockout"),
+                axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  scale_fill_manual(values = c("#f79548","#00aeff","#3b4982"), name = "", guide = guide_legend(reverse = TRUE)) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  scale_y_continuous(labels = percent_format()) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+  scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  geom_text(aes(label = sprintf("%.1f%%", percent)), position = position_fill(vjust = 0.5), size = 3.5, color = "white", fontface = "bold", family = "Knockout")
+
+  
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.13.tiff", width = 7, height = 4)
+  
+
+```
+
+
+
+```{r}
+
+
+full_sqf %>% 
+  mutate(age_cat = case_when(age >=10 & age <= 24 ~ "<25",
+                             age >=25 & age <= 44 ~ "25-44",
+                             age >=45 & age <= 98 ~ "45+")) %>% 
+  mutate(race = case_when(race == "nhwhite" ~ "White",
+                          race == "nhblack" ~ "Black",
+                          race == "hispanic" ~ "Hispanic",
+                          TRUE ~ "Other")) %>% 
+  filter(!is.na(age_cat)) %>% 
+  group_by(year, age_cat, race) %>% 
+  summarise(n = n()) %>% 
+  mutate(percent = n / sum(n) * 100) %>% 
+  mutate(percent = round(percent)) %>% 
+  mutate(race = fct_reorder(race, percent)) %>% 
+ ggplot(aes(x = year, y = percent, fill = race)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.85, key_glyph = draw_key_point) +
+  theme_classic() +
+theme(axis.text = element_text(size = 7),
+        panel.grid.major = element_blank(), 
+        axis.text.y=element_blank(), 
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "top",
+        text = element_text(family = "Knockout"),
+                axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  scale_fill_manual(values = c("#abadb0","#f79548","#00aeff","#3b4982"), name = "", guide = guide_legend(reverse = TRUE)) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  scale_y_continuous(labels = NULL) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+  scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  facet_wrap2(vars(age_cat), axes = "x", nrow = 2) +
+  geom_text(aes(label = ifelse(race %in% c("Black", "Hispanic"), sprintf("%d%%", percent), "")), size = 3, position = position_fill(vjust = 0.5), color = "white", fontface = "bold", family = "Knockout")
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.14.tiff", width = 7, height = 4)
+
+```
+
+
+```{r}
+
+sqf_age <- left_join(sqf_yearly_age_race, PD_census_age_race,  by = c("year" = "year", "age_cat" = "age_cat", "race" = "race")) %>% 
+  mutate(rate = round((n/total_pop)*100000),1) %>% 
+  select(year, age_cat, race, rate)  %>%  
+  pivot_wider(names_from = race, values_from = rate) %>% 
+  mutate(`Black/white` = round(nhblack/nhwhite,1),
+         `Hispanic/white` = round(hispanic/nhwhite,1)) %>% 
+  pivot_longer(cols = c(`Black/white`, `Hispanic/white`), names_to = "race") %>% 
+  select(year, age_cat, race, value) %>%
+  mutate(nudge_y = ifelse(race == "Black/white", .7, -.6)) 
+
+  ggplot(data = sqf_age,
+         aes(year, value, color = race, label = value)) +
+  geom_line(key_glyph = draw_key_point, size = 1) +
+  geom_point(data = . %>% filter(year %in% c(2022))) +
+  theme_classic() +
+  theme(axis.text = element_text(size = 7),
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "white"), 
+        axis.ticks.x = element_blank(), 
+        plot.title = element_text(size = 12), 
+        panel.grid.major = element_blank()) +
+ theme(plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        plot.title = element_text(size = 15, face = "bold"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "none", 
+        panel.grid.major.y = element_line(linetype = "solid", size = .5),
+        text = element_text(family = "Knockout"),
+                axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  scale_y_continuous(labels = comma) +
+  xlab("") +
+  expand_limits(y = 0) +
+  labs(y = '', x = '', color = '') +
+  scale_y_continuous(labels = comma) +
+  scale_colour_manual(values = c("#3b4982", "#00aeff")) +
+  guides(fill = guide_legend(override.aes = list(shape = 21, size = 5))) +
+  facet_wrap2(vars(age_cat), axes = "x") +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+   scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  geom_text(data = . %>% filter(year %in% c(2013, 2022)),
+                  aes(label = sprintf("%.1f", value)),
+                  size = 2.5, 
+             position = position_nudge(y = sqf_age$nudge_y),
+            color = 'black',
+            check_overlap = TRUE,
+            family = "Knockout") +
+    expand_limits(y = 20.1)
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.15.tiff", width = 7, height = 3.5)
+  
+  
+```
+
+
+```{r}
+
+full_sqf %>%
+  filter(!charge_cat == "Other") %>%
+  group_by(year, charge_cat) %>%
+  summarise(n = n()) %>%
+ ggplot(aes(x= year, y = n, fill = year))+
+  geom_b(stat = "identity", fill = "#3b4982") +
+  theme_classic() +
+ theme(text = element_text(family = "Knockout"),
+        plot.background = element_rect(fill = "NA"),
+        panel.background = element_rect(fill = "NA"),
+        plot.title = element_text(size = 15, face = "bold"),
+        legend.background  = element_rect(fill = "white", color = NA),
+        legend.position = "top",
+    axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout"),
+    axis.text = element_text(size = 7)) +
+  scale_y_continuous(labels = comma) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  theme(plot.background = element_rect(fill = "NA"),
+        panel.background = element_rect(fill = "NA"),
+        plot.title = element_text(size = 15, face = "bold"),
+        legend.background  = element_rect(fill = "white", color = NA),
+        legend.position = "top",
+        panel.grid.major = element_blank()) +
+  scale_y_continuous(labels = comma) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+   scale_x_continuous(breaks = seq(2013,2022,1),
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22"))+
+    facet_wrap2(vars(charge_cat), axes = "x") +
+  expand_limits(y = 30000)+
+   geom_text(data = . %>% filter(year %in% c(2013,2022)),
+                  aes(label = scales::comma(n)),
+             vjust = -.5,
+                  size = 2.5,
+            color = 'black',
+            family = "Knockout") 
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.16.tiff", width = 7, height = 4)
+
+```
+
+
+```{r}
+
+full_sqf %>% 
+  filter(!charge_cat == "Other") %>% 
+  mutate(race = case_when(race == "nhwhite" ~ "White",
+                          race == "nhblack" ~ "Black",
+                          race == "hispanic" ~ "Hispanic",
+                          TRUE ~ "Other")) %>% 
+  group_by(year, charge_cat, race) %>% 
+  summarise(n = n()) %>% 
+  mutate(percent = n / sum(n) * 100) %>% 
+  mutate(percent = round(percent)) %>% 
+    mutate(race = fct_reorder(race, percent))  %>% 
+  ggplot(aes(x = year, y = percent, fill = race)) +
+  geom_bar(stat = "identity", position = "fill", width = 0.85, key_glyph = draw_key_point) +
+  theme_classic() +
+theme(axis.text = element_text(size = 7),
+        panel.grid.major = element_blank(), 
+        axis.text.y=element_blank(), 
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "top",
+        text = element_text(family = "Knockout"),
+                axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  scale_fill_manual(values = c("#abadb0","#f79548","#00aeff","#3b4982"), name = "", guide = guide_legend(reverse = TRUE)) +
+  labs(y = '', x = '', color = '') +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+  scale_y_continuous(labels = NULL) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(shape = 21, size = 5))) +
+  scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  facet_wrap2(vars(charge_cat), axes = "x", nrow = 3) +
+  geom_text(aes(label = ifelse(race %in% c("Black", "Hispanic"), sprintf("%d%%", percent), "")), size = 3, position = position_fill(vjust = 0.5), color = "white", fontface = "bold", family = "Knockout")
+
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.17.tiff", width = 7, height = 4)
+
+```
+
+
+```{r}
+
+sqf_yearly_charge_race <- full_sqf %>% 
+  filter(race != "Other",
+         age > 9) %>% 
+  count(year, charge_cat, race)
+
+```
+
+
+```{r}
+
+sqf_charge <- left_join(sqf_yearly_charge_race, PD_census_race,  by = c("year" = "year", "race" = "race")) %>%
+  filter(charge_cat != "Other") %>%
+  mutate(rate = (n/total_pop)*100000) %>% 
+  select(year, charge_cat, race, rate)  %>%  
+  pivot_wider(names_from = race, values_from = rate) %>% 
+  mutate(`Black/white` = nhblack/nhwhite,
+         `Hispanic/white` = hispanic/nhwhite) %>% 
+  pivot_longer(cols = c(`Black/white`, `Hispanic/white`), names_to = "race") %>% 
+  select(year, charge_cat, race, value) %>%
+  mutate(nudge_y = ifelse(race == "Black/white", 2.5, -2.4)) 
+
+  ggplot(data = sqf_charge,
+         aes(year, value, color = race, label = value)) +
+  geom_line(key_glyph = draw_key_point, size =1) +
+      geom_point(data = . %>% filter(year %in% c(2022))) +
+  theme_classic() +
+theme(axis.text = element_text(size = 7),
+        panel.grid.major = element_blank(), 
+        plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "top",
+        text = element_text(family = "Knockout"),
+                axis.ticks.x=element_line(size=.05),
+    axis.ticks.length.x = unit(.1, "cm"),
+     axis.line.x = element_line(size = .05),
+    strip.text = element_text(family = "Knockout")) +
+  theme(plot.background = element_rect(fill = "NA"), 
+        panel.background = element_rect(fill = "NA"), 
+        plot.title = element_text(size = 15, face = "bold"), 
+        legend.background  = element_rect(fill = "white", color = NA), 
+        legend.position = "none", 
+        panel.grid.major.y = element_line(linetype = "solid", size = .5)) +
+  xlab("") +
+  expand_limits(y = 0) +
+  labs(y = '', x = '', color = '') +
+  scale_y_continuous(labels = comma) +
+  scale_colour_manual(values = c("#3b4982", "#00aeff")) +
+  guides(fill = guide_legend(override.aes = list(shape = 21, size = 5))) +
+  facet_wrap2(vars(charge_cat), axes = "x") +
+  easy_remove_y_axis(what = c("line", "ticks")) +
+   scale_x_continuous(breaks = seq(2013,2022,1), 
+                     labels = c("'13","'14","'15","'16","'17","'18","'19","'20","'21","'22")) +
+  geom_text(data = . %>% filter(year %in% c(2013, 2022)),
+                  aes(label = sprintf("%.1f", value)),
+                  size = 2.5, 
+             position = position_nudge(y = sqf_charge$nudge_y),
+            color = 'black',
+            family = "Knockout",
+            check_overlap = TRUE)
+
+
+setwd("C:/R Projects/Police Reform/Graphs")
+ggsave("Figure_2.18.tiff", width = 7, height = 4)
+
+
+```
